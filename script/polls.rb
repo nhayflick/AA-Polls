@@ -21,8 +21,8 @@ class Polls
       end
     end
 
-    def print_poll(poll_id)
-      poll = Poll.includes(:questions => [:choices => [:responses]]).find(poll_id)
+    def print_poll(pid)
+      poll = Poll.includes(:questions => [:choices => [:responses]]).find(pid)
       if poll.nil?
         puts "Invalid poll id"
       else
@@ -106,7 +106,8 @@ class Polls
         question_body = get_non_empty_input "Question #{questions + 1}:"
         question = poll.add_question(question_body)
         add_choices(question)
-        break if get_non_empty_input("Add another question? (y/n) ").downcase[0] == 'n'
+        add_str = "Add another question? (y/n) "
+        break if get_non_empty_input(add_str).downcase[0] == 'n'
         questions += 1
       end
       questions
@@ -116,7 +117,8 @@ class Polls
       while true
         choice = get_non_empty_input "Choice #{choices + 1}:"
         question.add_choice(choice)
-        break if get_non_empty_input("Add another choice? (y/n) ").downcase[0] == 'n'
+        add_str = "Add another choice? (y/n) "
+        break if get_non_empty_input(add_str).downcase[0] == 'n'
         choices += 1
       end
       choices
