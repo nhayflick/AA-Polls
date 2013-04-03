@@ -1,39 +1,41 @@
 class Response < ActiveRecord::Base
-  belongs_to :user
-  <<-SQL
-    SELECT users.*
-    FROM users
-    WHERE users.id = user_id
-  SQL
-
-  belongs_to :choice
-  <<-SQL
-    SELECT choices.*
-    FROM choices
-    WHERE choices.id = choice_id
-  SQL
-
+  
   attr_accessible :choice_id, :user_id
 
+  belongs_to :user
+  # <<-SQL
+  #   SELECT users.*
+  #   FROM users
+  #   WHERE users.id = user_id
+  # SQL
+
+  belongs_to :choice
+  # <<-SQL
+  #   SELECT choices.*
+  #   FROM choices
+  #   WHERE choices.id = choice_id
+  # SQL
+
   has_one :poll, :through => :choice
-  <<-SQL
-    SELECT polls.*
-    FROM polls JOIN questions ON (questions.poll_id = poll.id)
-    JOIN choices ON (choices.question_id = questions.id)
-    WHERE choices.id = choice_id
-    LIMIT 1
-  SQL
+  # <<-SQL
+  #   SELECT polls.*
+  #   FROM polls JOIN questions ON (questions.poll_id = poll.id)
+  #   JOIN choices ON (choices.question_id = questions.id)
+  #   WHERE choices.id = choice_id
+  #   LIMIT 1
+  # SQL
 
   has_one :question, :through => :choice
-  <<-SQL
-    SELECT questions.*
-    FROM questions JOIN choices ON (choices.question_id = questions.id)
-    WHERE choices.id = choice_id
-    LIMIT 1
-  SQL
+  # <<-SQL
+  #   SELECT questions.*
+  #   FROM questions JOIN choices ON (choices.question_id = questions.id)
+  #   WHERE choices.id = choice_id
+  #   LIMIT 1
+  # SQL
 
   validates :choice, :user, presence: true
-  validate :cannot_answer_own_poll, :user_in_team, :one_user_response_per_question
+  validate :cannot_answer_own_poll, :user_in_team, 
+    :one_user_response_per_question
  
   def cannot_answer_own_poll
     if poll.creator_id == user_id

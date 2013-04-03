@@ -10,7 +10,7 @@ class Polls
     def list_users
       User.includes(:team).all.each do |user|
         team = user.team ? user.team.name : 'None'
-        puts "#{user.username.rjust(15)} - team: #{team}"
+        puts "#{user.username.ljust(20)} - team: #{team}"
       end
     end
 
@@ -21,26 +21,34 @@ class Polls
       end
     end
 
-    def show_poll(poll_id)
+    def print_poll(poll_id)
       poll = Poll.includes(:questions => [:choices => [:responses]]).find(poll_id)
       if poll.nil?
         puts "Invalid poll id"
       else
         puts poll.title
-        poll.questions.each do |question|
-          puts question.body
-          question.choices.each do |choice|
-            puts "#{choice.body} - #{choice.responses.count}"
-          end
-        end
+        poll.questions.each { |question| print_question(question) }
       end
     end
 
-    def list_user_polls(username)
+    def print_question(question)
+      puts question.body
+      question.choices.each do |choice|
+        puts "#{choice.body} - #{choice.responses.count}"
+      end
+    end
+
+    def list_user_helper(username, &proc)
       user = User.find_by_username(username)
       if user.nil?
         puts "Invalid username: #{username}"
       else
+        proc.call(user)
+      end
+    end
+
+    def list_user_polls(username)
+      list_user_helper(username) do |user|
         user.polls.each do |poll|
           puts "#{poll.id.to_s.rjust(2)} - #{poll.title}"
         end
@@ -48,10 +56,7 @@ class Polls
     end
 
     def list_user_answers(username)
-      user = User.find_by_username(username)
-      if user.nil?
-        puts "Invalid username: #{username}"
-      else
+      list_user_helper(username) do |user|
         user.responses.includes(:choice, :question).each do |response|
           puts "#{response.question.body} - #{response.choice.body}"
         end
@@ -68,21 +73,22 @@ class Polls
           puts "This poll is for team #{poll.team.name} only"
           return
         end
-
-        poll.questions.each do |question|
-          next if question.has_answered_this_question?(user.id)
-          puts question.body
-          question.choices.each_with_index do |choice, index|
-            puts "#{index + 1} - #{choice.body}"
-          end
-          choice = 0
-          while choice == 0
-            choice = gets.chomp.to_i
-          end
-          Response.create!(user_id: user.id, 
-            choice_id: question.choices[choice - 1].id)
-        end
+        poll.questions.each { |question| answer_question(question, user) }
       end
+    end
+
+    def answer_question(question, user)
+      return if question.has_answered_this_question?(user.id)
+      puts question.body
+      question.choices.each_with_index do |choice, index|
+        puts "#{index + 1} - #{choice.body}"
+      end
+      choice = 0
+      while choice == 0
+        choice = gets.chomp.to_i
+      end
+      Response.create!(user_id: user.id, 
+        choice_id: question.choices[choice - 1].id)
     end
 
     def create_poll(user)
@@ -92,22 +98,21 @@ class Polls
       poll = Poll.create!(creator_id: user.id, title: poll_title, 
         team_id: team_only ? user.team_id : nil)
 
-      create_questions(poll)
+      add_questions(poll)
     end
 
-    def create_questions(poll, questions = 0)
+    def add_questions(poll, questions = 0)
       while true
         question_body = get_non_empty_input "Question #{questions + 1}:"
         question = poll.add_question(question_body)
-        create_choices(question)
+        add_choices(question)
         break if get_non_empty_input("Add another question? (y/n) ").downcase[0] == 'n'
         questions += 1
       end
       questions
     end
 
-    def create_choices(question)
-      choices = 0
+    def add_choices(question, choices = 0)
       while true
         choice = get_non_empty_input "Choice #{choices + 1}:"
         question.add_choice(choice)
@@ -118,54 +123,66 @@ class Polls
     end
 
     def get_non_empty_input(s = nil)
-      puts s unless s.nil?
       input = ""
       while input.empty?
+        puts s unless s.nil?
         input = gets.chomp.strip
       end
       input
     end
 
-    def delete_question(user, poll_id, question_index)
+    def modify_question_helper(user, poll_id, action, &proc)
       poll = Poll.includes(:questions).find(poll_id)
       if poll.nil?
         puts "That poll doesn't exist yet."
       elsif poll.creator_id != user.id
-        puts "Only a poll's creator can delete questions."
+        puts "Only a poll's creator can #{action} questions."
       else 
-        poll.questions[question_index.to_i - 1].destroy unless poll.questions[question_index.to_i - 1].nil?
+        proc.call(poll)
+      end
+    end
+
+    def delete_question(user, poll_id, question_index)
+      modify_question_helper(user, poll_id, "delete") do |poll|
+        q = poll.questions[question_index.to_i - 1]
+        q.destroy unless q.nil?
       end
     end
 
     def add_question(user, poll_id)
-      poll = Poll.includes(:questions).find(poll_id)
-      if poll.nil?
-        puts "That poll doesn't exist yet."
-      elsif poll.creator_id != user.id
-        puts "Only a poll's creator can add questions."
-      else 
-        create_questions(poll, poll.questions.count)
+      modify_question_helper(user, poll_id, "add") do |poll|
+        add_questions(poll, poll.questions.count)
       end
     end
+
+    def exec_command(user, input)
+      case input[0]
+      when 'users'            then list_users
+      when 'polls'            then list_polls
+      when 'user-polls'       then list_user_polls(input[1])
+      when 'user-answers'     then list_user_answers(input[1])
+      when 'poll'             then print_poll(input[1])
+      when 'take-poll'        then take_poll(user, input[1])
+      when 'create-poll'      then create_poll(user)
+      when 'add-question'     then add_question(user, input[1])
+      when 'delete-question'  then delete_question(user, input[1], input[2])
+      when 'exit'             then return true
+      when 'quit'             then return true
+      else                    puts 'Invalid command'
+      end
+      false
+    end
+
 
     def run
       user = login
       while true
         print "Polls: > "
         input = get_non_empty_input.split(' ')
-        case input[0]
-        when 'users'            then list_users
-        when 'polls'            then list_polls
-        when 'user-polls'       then list_user_polls(input[1])
-        when 'user-answers'     then list_user_answers(input[1])
-        when 'poll'             then show_poll(input[1])
-        when 'take-poll'        then take_poll(user, input[1])
-        when 'create-poll'      then create_poll(user)
-        when 'add-question'     then add_question(user, input[1])
-        when 'delete-question'  then delete_question(user, input[1], input[2])
-        when 'exit'             then break
-        when 'quit'             then break
-        else                    puts 'Invalid command'
+        begin
+          break if exec_command(user, input)
+        rescue ActiveRecord::RecordInvalid => e
+          puts e
         end
       end
     end
