@@ -37,6 +37,7 @@ class Response < ActiveRecord::Base
   validate :cannot_answer_own_poll, :user_in_team, 
     :one_user_response_per_question
  
+  # REV: Looks right to me!
   def cannot_answer_own_poll
     if poll.creator_id == user_id
       errors[:user_id] << "can't answer your own poll"

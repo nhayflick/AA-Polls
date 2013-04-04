@@ -22,6 +22,7 @@ class User < ActiveRecord::Base
   # WHERE teams.id = team_id
   # SQL
 
+  # REV: Validation seems good!
   validates :username, presence: true, uniqueness: true, 
     length: { :maximum => 255 }
   validates :team, presence: true, :unless => :no_team?
